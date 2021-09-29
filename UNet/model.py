@@ -1,16 +1,18 @@
 import torch
 import torch.nn as nn
-from torchvision import transforms, datasets
+
+import os
+import numpy as np
 
 class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
 
-        # convolution, batch normalization, RelU, 2D
         def CBR2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True):
             layers = []
             layers += [nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
-                                 kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)]
+                                 kernel_size=kernel_size, stride=stride, padding=padding,
+                                 bias=bias)]
             layers += [nn.BatchNorm2d(num_features=out_channels)]
             layers += [nn.ReLU()]
 
@@ -18,7 +20,7 @@ class UNet(nn.Module):
 
             return cbr
 
-        ## 나머지 인자는 default값 사용
+        # Contracting path
         self.enc1_1 = CBR2d(in_channels=1, out_channels=64)
         self.enc1_2 = CBR2d(in_channels=64, out_channels=64)
 
@@ -41,17 +43,17 @@ class UNet(nn.Module):
 
         self.enc5_1 = CBR2d(in_channels=512, out_channels=1024)
 
-
+        # Expansive path
         self.dec5_1 = CBR2d(in_channels=1024, out_channels=512)
 
-        self.unpool4 = nn.ConvTranspose2d(in_channels=512, out_channels=512, kernel_size=2,
-                                          stride=2, padding=0, bias=True)
+        self.unpool4 = nn.ConvTranspose2d(in_channels=512, out_channels=512,
+                                          kernel_size=2, stride=2, padding=0, bias=True)
 
         self.dec4_2 = CBR2d(in_channels=2 * 512, out_channels=512)
         self.dec4_1 = CBR2d(in_channels=512, out_channels=256)
 
-        self.unpool3 = nn.ConvTranspose2d(in_channels=256, out_channels=256, kernel_size=2,
-                                          stride=2, padding=0, bias=True)
+        self.unpool3 = nn.ConvTranspose2d(in_channels=256, out_channels=256,
+                                          kernel_size=2, stride=2, padding=0, bias=True)
 
         self.dec3_2 = CBR2d(in_channels=2 * 256, out_channels=256)
         self.dec3_1 = CBR2d(in_channels=256, out_channels=128)
@@ -68,7 +70,7 @@ class UNet(nn.Module):
         self.dec1_2 = CBR2d(in_channels=2 * 64, out_channels=64)
         self.dec1_1 = CBR2d(in_channels=64, out_channels=64)
 
-        self.fc = nn.Conv2d(in_channels=64, out_channels=2, kernel_size=1, stride=1, padding=0, bias=True)
+        self.fc = nn.Conv2d(in_channels=64, out_channels=1, kernel_size=1, stride=1, padding=0, bias=True)
 
     def forward(self, x):
         enc1_1 = self.enc1_1(x)
@@ -91,8 +93,7 @@ class UNet(nn.Module):
 
         dec5_1 = self.dec5_1(enc5_1)
 
-        unpool4 = self.unpool3(dec5_1)
-        # 두 채널을 연결 cat
+        unpool4 = self.unpool4(dec5_1)
         cat4 = torch.cat((unpool4, enc4_2), dim=1)
         dec4_2 = self.dec4_2(cat4)
         dec4_1 = self.dec4_1(dec4_2)
@@ -107,7 +108,7 @@ class UNet(nn.Module):
         dec2_2 = self.dec2_2(cat2)
         dec2_1 = self.dec2_1(dec2_2)
 
-        unpool1 = self.unpool3(dec2_1)
+        unpool1 = self.unpool1(dec2_1)
         cat1 = torch.cat((unpool1, enc1_2), dim=1)
         dec1_2 = self.dec1_2(cat1)
         dec1_1 = self.dec1_1(dec1_2)
@@ -115,8 +116,3 @@ class UNet(nn.Module):
         x = self.fc(dec1_1)
 
         return x
-
-
-
-
-

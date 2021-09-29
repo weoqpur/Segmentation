@@ -1,6 +1,6 @@
 import os
 import numpy as np
-
+from utils import load, save
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -25,10 +25,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 transform = transforms.Compose([Normalization(mean=0.5, std=0.5), RandomFlip(), ToTensor()])
 
 dataset_train = Dataset(data_dir=os.path.join(data_dir, 'train'), transfrom=transform)
-loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=8)
+loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=0)
 
 dataset_val = Dataset(data_dir=os.path.join(data_dir, 'val'), transfrom=transform)
-loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=8)
+loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=0)
 
 #  네트워크 생성하기
 net = UNet().to(device)
@@ -57,6 +57,7 @@ writer_val = SummaryWriter(log_dir=os.path.join(log_dir, 'val'))
 
 # 네트워크 학습하기
 st_epoch = 0
+net, optim , st_epoch = load(ckpt_dir=ckpt_dir, net=net, optim=optim)
 
 for epoch in range(st_epoch + 1, num_epoch + 1):
     net.train()
@@ -115,7 +116,7 @@ for epoch in range(st_epoch + 1, num_epoch + 1):
 
             # Tensorboard 저장하기
             label = fn_tonumpy(label)
-            input = fn_tonumpy(fn_denorm(input))
+            input = fn_tonumpy(fn_denorm(input, mean=0.5, std=0.5))
             output = fn_tonumpy(fn_class(output))
 
             writer_val.add_image('label', label, num_batch_val * (epoch - 1) + batch, dataformats='NHWC')
@@ -123,6 +124,9 @@ for epoch in range(st_epoch + 1, num_epoch + 1):
             writer_val.add_image('output', output, num_batch_val * (epoch - 1) + batch, dataformats='NHWC')
 
     writer_val.add_scalar('loss', np.mean(loss_arr), epoch)
+
+    if epoch % 50 == 0:
+        save(ckpt_dir=ckpt_dir, net=net, optim=optim, epoch=epoch)
 
 writer_train.close()
 writer_val.close()
